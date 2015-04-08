@@ -1,0 +1,8 @@
+package ffiexp
+
+sourcedir = src
+modules = FfiExp
+
+makefile = MakefileFfiExpc
+objs = ffiexp.o
+

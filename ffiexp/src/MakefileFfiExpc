@@ -1,0 +1,9 @@
+CC = gcc
+CFLAGS = `idris --include`
+
+ffiexp.o: ffiexp.c ffiexp.h
+
+clean: .PHONY
+	rm ffiexp.o
+
+.PHONY:
