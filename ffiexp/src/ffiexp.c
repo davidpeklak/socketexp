@@ -47,6 +47,10 @@ void freeBuf(void *buf) {
 }
 
 void *id(void *ptr) {
- return ptr;
+  return ptr;
+}
+
+int isNull(void *ptr) {
+  return ptr == NULL;
 }
 

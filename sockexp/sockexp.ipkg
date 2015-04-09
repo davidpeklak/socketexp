@@ -1,0 +1,6 @@
+package sockexp
+
+sourcedir = src
+modules = SockExp
+opts = "-p effects -p ffiexp"
+

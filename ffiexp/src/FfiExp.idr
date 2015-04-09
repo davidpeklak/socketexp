@@ -36,3 +36,6 @@ getStr ptr = foreign FFI_C "id" (Ptr -> IO String) ptr
 close : Int -> IO ()
 close sockfd = foreign FFI_C "close" (Int -> IO ()) sockfd
 
+isNull : Ptr -> IO Bool
+isNull ptr = pure (!(foreign FFI_C "isNull" (Ptr -> IO Int) ptr) == 1)
+
