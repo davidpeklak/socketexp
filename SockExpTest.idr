@@ -2,11 +2,19 @@ module Main
 
 import SockExp
 import Effects
+import Effect.StdIO
 
-test : { [CLISOCK ()] ==> {ok} [CLISOCK (if ok then CliSockState ConnectedT else CliSockState ErrorT)] } Eff Bool
-test = connect "localhost" 8765
+test : { [CLISOCK (), STDIO] } Eff ()
+test = do r <- connect "localhost" 8765
+          case r of
+               True => do putStrLn "succeeded"
+                          close
+               False => do e <- getErr
+                           putStrLn e
+                           dismiss
+          
 
-testIO : IO Bool
+testIO : IO ()
 testIO = run test
 
 main : IO ()

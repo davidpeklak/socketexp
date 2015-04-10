@@ -27,7 +27,5 @@ void freeBuf(void *buf);
 
 void *id(void *ptr);
 
-int isNull(void *ptr);
-
 #endif
 

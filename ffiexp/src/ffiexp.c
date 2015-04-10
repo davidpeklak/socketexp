@@ -50,7 +50,3 @@ void *id(void *ptr) {
   return ptr;
 }
 
-int isNull(void *ptr) {
-  return ptr == NULL;
-}
-
