@@ -19,8 +19,8 @@ readT (Left s)  = CliSockState ErrorT
 
 data CliSock : Effect where
   Connect : String -> Int -> { () ==> {ok} if ok then CliSockState ConnectedT else CliSockState ErrorT } CliSock Bool
---  Write   : String -> { CliSockState ConnectedT ==> {ok} if ok then CliSockState ReadingT else CliSockState ErrorT } CliSock Bool
---  Read    : { CliSockState ReadingT ==> {rslt} readT rslt } CliSock (Either String String)
+  Write   : String -> { CliSockState ConnectedT ==> {ok} if ok then CliSockState ReadingT else CliSockState ErrorT } CliSock Bool
+  Read    : { CliSockState ReadingT ==> {rslt} readT rslt } CliSock (Either String String)
   Close   : { CliSockState ConnectedT ==> () } CliSock ()
   GetErr  : { CliSockState ErrorT } CliSock String
   Dismiss : { CliSockState ErrorT ==> () } CliSock ()
@@ -35,6 +35,10 @@ instance Handler CliSock IO where
                                                                                              else k True (ConnectedS sfd) 
   handle (ConnectedS sfd) Close k = do close sfd
                                        k () ()
+  handle (ConnectedS sfd) (Write s) k = do r <- FfiExp.write sfd s
+                                           if r < 0 then k False (ErrorS "Failed to write")
+                                                    else k True (ReadingS sfd)
+  handle (ReadingS sfd) Read k = k (Right "Not implemented") (ConnectedS sfd)
   handle (ErrorS e) GetErr k = k e (ErrorS e)
   handle (ErrorS e) Dismiss k = k () ()
 
@@ -46,6 +50,12 @@ connect host port = call (Connect host port)
 
 close : { [CLISOCK (CliSockState ConnectedT)] ==> [CLISOCK ()] } Eff ()
 close = call Close
+
+write : String -> { [CLISOCK (CliSockState ConnectedT)] ==> {ok} [CLISOCK (if ok then CliSockState ReadingT else CliSockState ErrorT)] } Eff Bool
+write s = call (Write s)
+
+read : { [CLISOCK (CliSockState ReadingT)] ==> {rslt} [CLISOCK (readT rslt)] } Eff (Either String String)
+read = call SockExp.Read
 
 getErr : { [CLISOCK (CliSockState ErrorT)] } Eff String
 getErr = call GetErr

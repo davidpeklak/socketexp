@@ -4,14 +4,18 @@ import SockExp
 import Effects
 import Effect.StdIO
 
+reportErr : { [CLISOCK (CliSockState ErrorT), STDIO] ==> [CLISOCK (), STDIO] } Eff ()
+reportErr = do putStrLn !getErr
+               dismiss
+
 test : { [CLISOCK (), STDIO] } Eff ()
-test = do r <- connect "localhost" 8765
-          case r of
-               True => do putStrLn "succeeded"
-                          close
-               False => do e <- getErr
-                           putStrLn e
-                           dismiss
+test = do True <- connect "localhost" 8765
+            | False => reportErr
+          True <- write "hallo"
+            | False => reportErr
+          Right s <- read
+            | Left e => reportErr
+          close
           
 
 testIO : IO ()
