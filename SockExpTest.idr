@@ -13,8 +13,9 @@ test = do True <- connect "localhost" 8765
             | False => reportErr
           True <- write "hallo"
             | False => reportErr
-          Right s <- read
-            | Left e => reportErr
+          DoneR s <- read 255
+            | FailedR => reportErr
+          putStrLn s
           close
           
 

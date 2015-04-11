@@ -13,14 +13,20 @@ data CliSockState : CliSockType -> Type where
   ReadingS   : Int -> CliSockState ReadingT
   ErrorS     : String -> CliSockState ErrorT
 
-readT : (Either String String) -> Type
-readT (Right s) = CliSockState ConnectedT
-readT (Left s)  = CliSockState ErrorT
+data ReadResult : Type where
+  DoneR   : String -> ReadResult -- reading succeeded, less than the whole buffer was used
+  ContR   : String -> ReadResult -- reading succeeded, the whole buffer was used
+  FailedR : ReadResult           -- reading failed
+
+readT : ReadResult -> CliSockType
+readT (DoneR _)   = ConnectedT
+readT (ContR _)   = ReadingT
+readT FailedR     = ErrorT
 
 data CliSock : Effect where
-  Connect : String -> Int -> { () ==> {ok} if ok then CliSockState ConnectedT else CliSockState ErrorT } CliSock Bool
-  Write   : String -> { CliSockState ConnectedT ==> {ok} if ok then CliSockState ReadingT else CliSockState ErrorT } CliSock Bool
-  Read    : { CliSockState ReadingT ==> {rslt} readT rslt } CliSock (Either String String)
+  Connect : String -> Int -> { () ==> {ok} CliSockState (if ok then ConnectedT else ErrorT) } CliSock Bool
+  Write   : String -> { CliSockState ConnectedT ==> {ok} CliSockState (if ok then ReadingT else  ErrorT) } CliSock Bool
+  Read    : Int -> { CliSockState ReadingT ==> {rslt} CliSockState (readT rslt) } CliSock ReadResult
   Close   : { CliSockState ConnectedT ==> () } CliSock ()
   GetErr  : { CliSockState ErrorT } CliSock String
   Dismiss : { CliSockState ErrorT ==> () } CliSock ()
@@ -38,24 +44,29 @@ instance Handler CliSock IO where
   handle (ConnectedS sfd) (Write s) k = do r <- FfiExp.write sfd s
                                            if r < 0 then k False (ErrorS "Failed to write")
                                                     else k True (ReadingS sfd)
-  handle (ReadingS sfd) Read k = k (Right "Not implemented") (ConnectedS sfd)
+  handle (ReadingS sfd) (Read length) k = do buf <- allocBuf length
+                                             r <- FfiExp.read sfd buf length
+                                             if r < 0 then k FailedR (ErrorS "Failed to read")
+                                                      else do s <- getStr buf
+                                                              if r < length then k (DoneR s) (ConnectedS sfd)
+                                                                            else k (ContR s) (ReadingS sfd)
   handle (ErrorS e) GetErr k = k e (ErrorS e)
   handle (ErrorS e) Dismiss k = k () ()
 
 CLISOCK : Type -> EFFECT
 CLISOCK t = MkEff t CliSock
 
-connect : String -> Int -> { [CLISOCK ()] ==> {ok} [CLISOCK (if ok then CliSockState ConnectedT else CliSockState ErrorT)] } Eff Bool
+connect : String -> Int -> { [CLISOCK ()] ==> {ok} [CLISOCK (CliSockState (if ok then ConnectedT else ErrorT))] } Eff Bool
 connect host port = call (Connect host port)
 
 close : { [CLISOCK (CliSockState ConnectedT)] ==> [CLISOCK ()] } Eff ()
 close = call Close
 
-write : String -> { [CLISOCK (CliSockState ConnectedT)] ==> {ok} [CLISOCK (if ok then CliSockState ReadingT else CliSockState ErrorT)] } Eff Bool
+write : String -> { [CLISOCK (CliSockState ConnectedT)] ==> {ok} [CLISOCK (CliSockState (if ok then ReadingT else ErrorT))] } Eff Bool
 write s = call (Write s)
 
-read : { [CLISOCK (CliSockState ReadingT)] ==> {rslt} [CLISOCK (readT rslt)] } Eff (Either String String)
-read = call SockExp.Read
+read : Int -> { [CLISOCK (CliSockState ReadingT)] ==> {rslt} [CLISOCK (CliSockState (readT rslt))] } Eff ReadResult
+read length = call (SockExp.Read length)
 
 getErr : { [CLISOCK (CliSockState ErrorT)] } Eff String
 getErr = call GetErr
