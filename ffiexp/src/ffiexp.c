@@ -50,3 +50,7 @@ void *id(void *ptr) {
   return ptr;
 }
 
+int myaccept(int sockfd) {
+  return accept(sockfd, NULL, NULL);
+}
+

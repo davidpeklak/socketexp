@@ -12,7 +12,7 @@ getHostByName s = foreign FFI_C "gethostbyname" (String -> IO Ptr) s
 clientconnect : Int -> Ptr -> Int -> IO Int
 clientconnect sockfd hostent port = foreign FFI_C "clientconnect" (Int -> Ptr -> Int -> IO Int) sockfd hostent port 
 
-serverconnect: Int -> Int -> IO Int
+serverconnect : Int -> Int -> IO Int
 serverconnect sockfd port = foreign FFI_C "serverconnect" (Int -> Int -> IO Int) sockfd port
 
 write : Int -> String -> IO Int
@@ -38,4 +38,10 @@ close sockfd = foreign FFI_C "close" (Int -> IO ()) sockfd
 
 isNull : Ptr -> IO Bool
 isNull ptr = pure (!(foreign FFI_C "isNull" (Ptr -> IO Int) ptr) == 1)
+
+listen : Int -> Int -> IO Int
+listen sockfd backlog = foreign FFI_C "listen" (Int -> Int -> IO Int) sockfd backlog
+
+myaccept : Int -> IO Int
+myaccept sockfd = foreign FFI_C "myaccept" (Int -> IO Int) sockfd
 

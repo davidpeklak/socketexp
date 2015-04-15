@@ -27,5 +27,7 @@ void freeBuf(void *buf);
 
 void *id(void *ptr);
 
+int myaccept(int sockfd);
+
 #endif
 
