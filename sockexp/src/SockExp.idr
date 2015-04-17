@@ -46,8 +46,10 @@ instance Handler CliSock IO where
                                                           else k True (CliReadingS sfd)
   handle (CliReadingS sfd) (CliRead length) k = do buf <- allocBuf length
                                                    r <- FfiExp.read sfd buf length
-                                                   if r < 0 then k FailedR (CliErrorS "Failed to read")
+                                                   if r < 0 then do freeBuf buf
+                                                                    k FailedR (CliErrorS "Failed to read")
                                                             else do s <- getStr buf
+                                                                    freeBuf buf
                                                                     if r < length then k (DoneR s) (CliConnectedS sfd)
                                                                                   else k (ContR s) (CliReadingS sfd)
   handle (CliErrorS e) CliGetErr k = k e (CliErrorS e)
@@ -83,21 +85,55 @@ data SrvSockType : Type where
   SrvDoneWritingT : SrvSockType
   SrvErrorT       : SrvSockType
 
-data SrvSockState : SrvSockType -> Type
+data SrvSockState : SrvSockType -> Type where
+  SrvListeningS   : Int -> SrvSockState SrvListeningT
+  SrvErrorS       : String -> SrvSockState SrvErrorT
+  SrvReadingS     : Int -> Int -> SrvSockState SrvReadingT
+  SrvDoneReadingS : Int -> Int -> SrvSockState SrvDoneReadingT
+  SrvDoneWritingS : Int -> Int -> SrvSockState SrvDoneWritingT
 
 srvReadT : ReadResult -> SrvSockType
 srvReadT (DoneR _) = SrvDoneReadingT
 srvReadT (ContR _) = SrvReadingT
-srvReadT FailedRT  = SrvErrorT
+srvReadT FailedR   = SrvErrorT
 
 data SrvSock : Effect where
   SrvBind : Int -> { () ==> {ok} SrvSockState (if ok then SrvListeningT else SrvErrorT) } SrvSock Bool
   SrvAccept : { SrvSockState SrvListeningT ==> {ok} SrvSockState (if ok then SrvReadingT else SrvErrorT) } SrvSock Bool
-  SrvRead : { SrvSockState SrvReadingT ==> {rslt} SrvSockState (srvReadT rslt) } SrvSock ReadResult
+  SrvRead : Int -> { SrvSockState SrvReadingT ==> {rslt} SrvSockState (srvReadT rslt) } SrvSock ReadResult
   SrvWrite : String -> { SrvSockState SrvDoneReadingT ==> {ok} SrvSockState (if ok then SrvDoneWritingT else SrvErrorT) } SrvSock Bool 
   SrvIntendRead : { SrvSockState SrvDoneWritingT ==> SrvSockState SrvReadingT } SrvSock ()
-  SrvCloseConn : { SrvSockState SrvDoneWritingT ==> {ok} SrvSockState (if ok then SrvListeningT else SrvErrorT) } SrvSock Bool
+  SrvCloseConn : { SrvSockState SrvDoneWritingT ==> SrvSockState SrvListeningT } SrvSock ()
   SrvClose : { SrvSockState SrvListeningT ==> () } SrvSock ()
   SrvGetErr : { SrvSockState SrvErrorT } SrvSock String
   SrvDismiss : { SrvSockState SrvErrorT ==> () } SrvSock ()
+
+instance Handler SrvSock IO where
+  handle () (SrvBind port) k = do sfd <- socket
+                                  if sfd < 0 then k False (SrvErrorS "Failed to create socket")
+                                             else do c <- serverconnect sfd port
+                                                     if c < 0 then k False (SrvErrorS "Failed to connect")
+                                                              else do listen sfd 1
+                                                                      k True (SrvListeningS sfd)
+  handle (SrvListeningS sfd) SrvAccept k = do asfd <- myaccept sfd
+                                              if asfd < 0 then k False (SrvErrorS "Failed to accept")
+                                                          else k True (SrvReadingS sfd asfd)
+  handle (SrvReadingS sfd asfd) (SrvRead length) k = do buf <- allocBuf length 
+                                                        r <- FfiExp.read asfd buf length
+                                                        if r < 0 then do freeBuf buf
+                                                                         k FailedR (SrvErrorS "Failed to read")
+                                                                  else do s <- getStr buf
+                                                                          freeBuf buf
+                                                                          if r < length then k (ContR s) (SrvReadingS sfd asfd)
+                                                                                        else k (DoneR s) (SrvDoneReadingS sfd asfd)
+  handle (SrvDoneReadingS sfd asfd) (SrvWrite s) k = do r <- FfiExp.write asfd s
+                                                        if r < 0 then k False (SrvErrorS "Failed to write")
+                                                                 else k True (SrvDoneWritingS sfd asfd)
+  handle (SrvDoneWritingS sfd asfd) SrvIntendRead k = k () (SrvReadingS sfd asfd)
+  handle (SrvDoneWritingS sfd asfd) SrvCloseConn k = do close asfd
+                                                        k () (SrvListeningS sfd)
+  handle (SrvListeningS sfd) SrvClose k = do close sfd
+                                             k () ()
+  handle (SrvErrorS e) SrvGetErr k = k e (SrvErrorS e)
+  handle (SrvErrorS e) SrvDismiss k = k () ()
 
