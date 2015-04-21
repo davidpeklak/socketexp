@@ -137,3 +137,34 @@ instance Handler SrvSock IO where
   handle (SrvErrorS e) SrvGetErr k = k e (SrvErrorS e)
   handle (SrvErrorS e) SrvDismiss k = k () ()
 
+SRVSOCK : Type -> EFFECT
+SRVSOCK t = MkEff t SrvSock
+
+srvBind : Int -> { [SRVSOCK ()] ==> {ok} [SRVSOCK (SrvSockState (if ok then SrvListeningT else SrvErrorT))] } Eff Bool
+srvBind port = call (SrvBind port)
+
+srvAccept : { [SRVSOCK (SrvSockState SrvListeningT)] ==> {ok} [SRVSOCK (SrvSockState (if ok then SrvReadingT else SrvErrorT))] } Eff Bool
+srvAccept = call SrvAccept
+
+srvRead : Int -> { [SRVSOCK (SrvSockState SrvReadingT)] ==> {rslt} [SRVSOCK (SrvSockState (srvReadT rslt))] } Eff ReadResult
+srvRead length = call (SrvRead length)
+
+srvWrite : String -> { [SRVSOCK (SrvSockState SrvDoneReadingT)] ==> {ok} [SRVSOCK (SrvSockState (if ok then SrvDoneWritingT else SrvErrorT))] } Eff Bool
+srvWrite s = call (SrvWrite s)
+
+srvIntendRead : { [SRVSOCK (SrvSockState SrvDoneWritingT)] ==> [SRVSOCK (SrvSockState SrvReadingT)] } Eff ()
+srvIntendRead = call SrvIntendRead
+
+srvCloseConn : { [SRVSOCK (SrvSockState SrvDoneWritingT)] ==> [SRVSOCK (SrvSockState SrvListeningT)] } Eff ()
+srvCloseConn = call SrvCloseConn
+
+srvClose : { [SRVSOCK (SrvSockState SrvListeningT)] ==> [SRVSOCK ()] } Eff ()
+srvClose = call SrvClose
+
+srvGetErr : { [SRVSOCK (SrvSockState SrvErrorT)] } Eff String
+srvGetErr = call SrvGetErr
+
+srvDismiss : { [SRVSOCK (SrvSockState SrvErrorT)] ==> [SRVSOCK ()] } Eff ()
+srvDismiss = call SrvDismiss 
+
+
