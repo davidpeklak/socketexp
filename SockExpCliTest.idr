@@ -10,9 +10,9 @@ cliReportErr = do putStrLn !cliGetErr
 
 cliKeepReading : Int -> String -> { [CLISOCK (CliSockState CliReadingT)] ==> {rslt} [CLISOCK (CliSockState (cliReadT rslt))] } Eff ReadResult
 cliKeepReading n ps = do DoneR s <- cliRead n
-                           | ContR s => cliKeepReading n (ps ++ "++" ++ s)
+                           | ContR s => cliKeepReading n (ps ++ s)
                            | FailedR => pureM FailedR
-                         pureM (DoneR (ps ++ "++" ++ s)) 
+                         pureM (DoneR (ps ++ s)) 
 
 
 test : { [CLISOCK (), STDIO] } Eff ()

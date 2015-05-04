@@ -124,8 +124,8 @@ instance Handler SrvSock IO where
                                                                          k FailedR (SrvErrorS "Failed to read")
                                                                   else do s <- getStr buf
                                                                           freeBuf buf
-                                                                          if r < length then k (ContR s) (SrvReadingS sfd asfd)
-                                                                                        else k (DoneR s) (SrvDoneReadingS sfd asfd)
+                                                                          if r < length then k (DoneR s) (SrvDoneReadingS sfd asfd)
+                                                                                        else k (ContR s) (SrvReadingS sfd asfd)
   handle (SrvDoneReadingS sfd asfd) (SrvWrite s) k = do r <- FfiExp.write asfd s
                                                         if r < 0 then k False (SrvErrorS "Failed to write")
                                                                  else k True (SrvDoneWritingS sfd asfd)
